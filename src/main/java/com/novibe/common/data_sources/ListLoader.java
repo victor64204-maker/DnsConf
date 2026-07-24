@@ -12,7 +12,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.StructuredTaskScope;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -33,12 +35,16 @@ public abstract class ListLoader<T> {
     @SuppressWarnings("preview")
     public List<T> fetchWebsites(List<String> urls) {
         @Cleanup var scope = StructuredTaskScope.open();
+
         List<StructuredTaskScope.Subtask<String>> requests = new ArrayList<>();
+
         urls.stream()
                 .map(url -> scope.fork(() -> fetchList(url)))
                 .forEach(requests::add);
+
         scope.join();
-        return requests.stream()
+
+        List<String> lines = requests.stream()
                 .map(StructuredTaskScope.Subtask::get)
                 .map(String::stripIndent)
                 .flatMap(s -> Pattern.compile("\\r?\\n").splitAsStream(s))
@@ -47,7 +53,33 @@ public abstract class ListLoader<T> {
                 .filter(line -> !line.startsWith("#"))
                 .map(String::toLowerCase)
                 .filter(filterRelatedLines())
-                .distinct()
+                .toList();
+
+        Map<String, String> uniqueDomains = new LinkedHashMap<>();
+
+        for (String line : lines) {
+            int delimiter = line.indexOf(' ');
+            if (delimiter == -1) {
+                continue;
+            }
+
+            String ip = line.substring(0, delimiter).trim();
+            String domain = removeWWW(line.substring(delimiter + 1).trim());
+
+            String existing = uniqueDomains.get(domain);
+
+            if (existing == null) {
+                uniqueDomains.put(domain, ip + " " + domain);
+                continue;
+            }
+
+            // Если для домена встретился 37.230.192.51 — заменяем предыдущую запись
+            if ("37.230.192.51".equals(ip)) {
+                uniqueDomains.put(domain, ip + " " + domain);
+            }
+        }
+
+        return uniqueDomains.values().stream()
                 .map(this::toObject)
                 .collect(Collectors.toCollection(ArrayList::new));
     }
