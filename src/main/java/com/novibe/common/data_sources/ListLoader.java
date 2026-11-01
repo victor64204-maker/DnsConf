@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 @Setter(onMethod_ = @Autowired)
 public abstract class ListLoader<T> {
 
-    private static final String CHATGPT_OVERRIDE_IP = "37.230.192.51";
+    private static final String CHATGPT_OVERRIDE_IP = "193.233.112.88";
     private static final String GOOGLE_AI_OVERRIDE_IP = "193.233.112.88";
     private static final Set<String> LEGACY_GEOHIDE_IPS = Set.of(
             "45.155.204.190", "37.230.192.51"
@@ -87,6 +87,7 @@ public abstract class ListLoader<T> {
             String line = lines[i];
             String header = line.stripLeading().toLowerCase(Locale.ROOT);
             if (header.startsWith("# chatgpt (openai)")) {
+                Log.io("Using GeoHide ChatGPT override IP: " + CHATGPT_OVERRIDE_IP);
                 inChatGptBlock = true;
                 inGoogleAiBlock = false;
             } else if (header.startsWith("# google gemini ai") || header.startsWith("# google ai")) {
