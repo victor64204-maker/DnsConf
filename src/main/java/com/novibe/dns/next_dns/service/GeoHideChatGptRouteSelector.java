@@ -4,6 +4,12 @@ import com.novibe.common.util.Log;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
+import java.net.Socket;
+import java.net.InetSocketAddress;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SNIHostName;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -75,15 +81,16 @@ public class GeoHideChatGptRouteSelector {
 
     private boolean probe(String ip, String hostname) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(
-                            URI.create("https://" + hostname + "/"))
-                    .timeout(Duration.ofSeconds(8))
-                    .header("Host", hostname)
-                    .GET()
-                    .build();
-            HttpResponse<Void> response = client.send(request,
-                    HttpResponse.BodyHandlers.discarding());
-            return response.statusCode() >= 200 && response.statusCode() < 500;
+            Socket socket = new Socket();
+            socket.connect(new InetSocketAddress(ip, 443), 5000);
+            socket.setSoTimeout(5000);
+            SSLSocket tls = (SSLSocket) SSLSocketFactory.getDefault()
+                    .createSocket(socket, hostname, 443, true);
+            SSLParameters parameters = tls.getSSLParameters();
+            parameters.setServerNames(List.of(new SNIHostName(hostname)));
+            tls.setSSLParameters(parameters);
+            tls.startHandshake();
+            return true;
         } catch (Exception e) {
             return false;
         }
