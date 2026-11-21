@@ -5,6 +5,7 @@ import com.novibe.common.data_sources.HostsOverrideListsLoader;
 import com.novibe.common.util.EnvParser;
 import com.novibe.common.util.Log;
 import com.novibe.dns.next_dns.service.NextDnsRewriteService;
+import com.novibe.dns.next_dns.service.GeoHideChatGptRouteSelector;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -19,14 +20,15 @@ public class NextDnsTaskRunner implements DnsTaskRunner {
 
     private final HostsOverrideListsLoader overrideListsLoader;
     private final NextDnsRewriteService nextDnsRewriteService;
+    private final GeoHideChatGptRouteSelector routeSelector;
 
     @Override
     public void run() {
         Log.global("NextDNS Rewrite");
         Log.common("""
-        Script behaviour: completely rebuilds only the Rewrite rules from REDIRECT sources.
-        Existing Denylist and all other NextDNS settings are left untouched.
-        If REDIRECT is empty or produces no valid domains, the existing Rewrite rules are left untouched.
+        Script updates only source-managed Rewrite rules.
+        Existing Denylist and DNS bypass settings are left untouched.
+        User-managed Rewrite rules are preserved; agreed Instagram/Facebook/Canva rules are removed.
         """);
 
         List<String> rewriteSources = EnvParser.parse(REDIRECT);
@@ -34,16 +36,19 @@ public class NextDnsTaskRunner implements DnsTaskRunner {
             throw new IllegalStateException("No REDIRECT sources configured; refusing to change existing Rewrite rules.");
         }
 
+        String chatGptIp = routeSelector.selectIfGeoHideConfigured(rewriteSources);
+        if (chatGptIp != null) HostsOverrideListsLoader.useChatGptOverrideIp(chatGptIp);
+
         Log.step("Obtain rewrite lists from %s sources".formatted(rewriteSources.size()));
         List<HostsOverrideListsLoader.BypassRoute> overrides = overrideListsLoader.fetchWebsites(rewriteSources);
         Log.common("Loaded %s valid Rewrite domains".formatted(overrides.size()));
 
-        Log.step("Build complete Rewrite snapshot");
+        Log.step("Build Rewrite updates");
         Map<String, com.novibe.dns.next_dns.http.dto.request.CreateRewriteDto> rewrites =
                 nextDnsRewriteService.buildNewRewrites(overrides);
         Log.common("Prepared %s unique Rewrite rules".formatted(rewrites.size()));
 
-        Log.step("Replace and verify NextDNS Rewrite rules");
+        Log.step("Reconcile and verify NextDNS Rewrite rules");
         nextDnsRewriteService.replaceAllAndVerify(rewrites);
 
         Log.global("FINISHED");

@@ -3,6 +3,10 @@ name: NextDNS Rewrite Configurer
 on:
   workflow_dispatch:
 
+concurrency:
+  group: nextdns-rewrite-sync
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,6 +35,7 @@ jobs:
 
       - name: Build with Maven
         run: mvn -B clean package
+
 
       - name: Run Rewrite synchronizer
         run: |
