@@ -86,7 +86,9 @@ public class GeoHideChatGptRouteSelector {
             socket.setSoTimeout(5000);
             SSLSocket tls = (SSLSocket) SSLSocketFactory.getDefault().createSocket(socket, hostname, 443, true);
             tls.setSoTimeout(5000);
-            var parameters = tls.getSSLParameters();\n            parameters.setServerNames(List.of(new javax.net.ssl.SNIHostName(hostname)));\n            tls.setSSLParameters(parameters);
+            var parameters = tls.getSSLParameters();
+            parameters.setServerNames(List.of(new javax.net.ssl.SNIHostName(hostname)));
+            tls.setSSLParameters(parameters);
             tls.startHandshake();
             var writer = new java.io.OutputStreamWriter(tls.getOutputStream(), StandardCharsets.US_ASCII);
             writer.write("GET / HTTP/1.1\\r\\nHost: " + hostname
