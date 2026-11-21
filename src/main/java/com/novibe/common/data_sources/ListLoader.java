@@ -43,6 +43,7 @@ public abstract class ListLoader<T> {
 
     @SneakyThrows @SuppressWarnings("preview")
     public List<T> fetchWebsites(List<String> urls) {
+        resetSpecialDomains();
         @Cleanup var scope = StructuredTaskScope.open();
         List<StructuredTaskScope.Subtask<String>> requests = new ArrayList<>();
         urls.stream().map(url -> scope.fork(() -> fetchList(url))).forEach(requests::add);
@@ -53,6 +54,9 @@ public abstract class ListLoader<T> {
                 .filter(filterRelatedLines()).distinct().map(this::toObject).collect(Collectors.toCollection(ArrayList::new));
     }
 
+    protected void resetSpecialDomains() { }
+    protected void collectSpecialDomains(String body) { }
+
     @SneakyThrows
     private String fetchList(String url) {
         Log.io("Loading %s list from url: %s".formatted(listType(), url));
@@ -61,6 +65,7 @@ public abstract class ListLoader<T> {
         if (response.statusCode() < 200 || response.statusCode() >= 300) throw new IllegalStateException("Source returned HTTP " + response.statusCode() + ": " + url);
         String body = response.body();
         if (body == null || body.isBlank()) throw new IllegalStateException("Source returned an empty body: " + url);
+        collectSpecialDomains(body);
         return rewriteSpecialBlocks(body);
     }
 
