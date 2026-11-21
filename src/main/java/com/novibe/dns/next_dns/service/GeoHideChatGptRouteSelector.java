@@ -91,7 +91,7 @@ public class GeoHideChatGptRouteSelector {
             tls.setSSLParameters(parameters);
             tls.startHandshake();
             var writer = new java.io.OutputStreamWriter(tls.getOutputStream(), StandardCharsets.US_ASCII);
-            writer.write("GET / HTTP/1.1\\r\\nHost: " + hostname
+            writer.write("GET / HTTP/1.1\r\nHost: " + hostname
                     + "\\r\\nConnection: Upgrade\\r\\nUpgrade: websocket"
                     + "\\r\\nSec-WebSocket-Version: 13\\r\\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\\r\\n\\r\\n");
             writer.flush();
