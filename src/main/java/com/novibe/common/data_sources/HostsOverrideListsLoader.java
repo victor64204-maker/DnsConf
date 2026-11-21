@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 @Service
@@ -14,12 +15,55 @@ public class HostsOverrideListsLoader extends ListLoader<HostsOverrideListsLoade
             "facebook.com", "facebook.net", "fbcdn.net", "fb.com", "fbsbx.com",
             "canva.com", "canva-apps.com", "canva.dev"
     );
+    private final Set<String> priorityDomains = ConcurrentHashMap.newKeySet();
 
     public static void useChatGptOverrideIp(String ip) {
         ListLoader.useChatGptOverrideIp(ip);
     }
 
     public record BypassRoute(String ip, String website) {
+    }
+
+    @Override
+    protected void resetSpecialDomains() {
+        priorityDomains.clear();
+        priorityDomains.add("ws.chatgpt.com");
+    }
+
+    @Override
+    protected void collectSpecialDomains(String body) {
+        boolean priorityBlock = false;
+        for (String line : body.split("\\R")) {
+            String header = line.stripLeading().toLowerCase(Locale.ROOT);
+            if (header.startsWith("#")) {
+                priorityBlock = header.startsWith("# chatgpt (openai)")
+                        || header.startsWith("# google gemini ai")
+                        || header.startsWith("# google ai");
+                continue;
+            }
+            if (!priorityBlock || line.isBlank()) continue;
+
+            String[] fields = line.strip().split("\\s+");
+            if (fields.length < 2) continue;
+            for (int i = 1; i < fields.length; i++) {
+                String domain = normalizeDomain(fields[i]);
+                if (!domain.isBlank() && !domain.startsWith("#") && !isExcludedDomain(domain)) {
+                    priorityDomains.add(domain);
+                }
+            }
+        }
+    }
+
+    public boolean isPriorityDomain(String domain) {
+        return priorityDomains.contains(normalizeDomain(domain));
+    }
+
+    private static String normalizeDomain(String domain) {
+        String normalized = domain.strip().toLowerCase(Locale.ROOT);
+        while (normalized.startsWith("*.")) normalized = normalized.substring(2);
+        while (normalized.startsWith("www.")) normalized = normalized.substring(4);
+        while (normalized.endsWith(".")) normalized = normalized.substring(0, normalized.length() - 1);
+        return normalized;
     }
 
     @Override
@@ -63,13 +107,9 @@ public class HostsOverrideListsLoader extends ListLoader<HostsOverrideListsLoade
 
     public static boolean isExcludedDomain(String domain) {
         if (domain == null || domain.isBlank()) return false;
-        String normalized = domain.strip().toLowerCase(Locale.ROOT);
-        while (normalized.startsWith("*.")) normalized = normalized.substring(2);
-        while (normalized.startsWith("www.")) normalized = normalized.substring(4);
-        while (normalized.endsWith(".")) normalized = normalized.substring(0, normalized.length() - 1);
-        final String hostname = normalized;
+        String normalized = normalizeDomain(domain);
         return EXCLUDED_DOMAIN_ROOTS.stream().anyMatch(root ->
-                hostname.equals(root) || hostname.endsWith("." + root));
+                normalized.equals(root) || normalized.endsWith("." + root));
     }
 
     private static String extractWebsite(String hostsEntry) {
