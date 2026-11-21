@@ -94,6 +94,7 @@ public class GeoHideChatGptRouteSelector {
                     .createSocket(socket, hostname, 443, true)) {
                 SSLParameters parameters = tls.getSSLParameters();
                 parameters.setServerNames(List.of(new SNIHostName(hostname)));
+                parameters.setEndpointIdentificationAlgorithm("HTTPS");
                 tls.setSSLParameters(parameters);
                 tls.startHandshake();
                 return true;
