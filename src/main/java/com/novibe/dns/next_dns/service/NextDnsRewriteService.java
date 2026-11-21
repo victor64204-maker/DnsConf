@@ -30,8 +30,8 @@ public class NextDnsRewriteService {
     }
 
     /**
-     * Replaces the complete Rewrite configuration with the validated source snapshot.
-     * Denylist is deliberately not accessed by this service.
+     * Reconciles source rules and removes only the agreed excluded domains.
+     * Unrelated Rewrite rules, Denylist, and DNS bypass settings are preserved.
      */
     public void replaceAllAndVerify(Map<String, CreateRewriteDto> expectedRewrites) {
         if (expectedRewrites == null || expectedRewrites.isEmpty()) {
@@ -62,7 +62,7 @@ public class NextDnsRewriteService {
         }
 
         if (!toDelete.isEmpty()) {
-            Log.io("Removing %s outdated, duplicate, changed, or excluded Rewrite rules".formatted(toDelete.size()));
+            Log.io("Removing %s excluded Rewrite rules".formatted(toDelete.size()));
             NextDnsRateLimitedApiProcessor.callApi(toDelete.stream().map(RewriteDto::id).toList(), nextDnsRewriteClient::deleteRewriteById);
         }
 
