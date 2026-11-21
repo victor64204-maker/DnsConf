@@ -16,17 +16,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 public class GeoHideChatGptRouteSelector {
     private static final String GEOHIDE_ROOT = "https://raw.githubusercontent.com/Internet-Helper/GeoHideDNS/refs/heads/main/hosts/hosts";
-    private static final Pattern IPV4 = Pattern.compile("^(?:\\d{1,3}\\.){3}\\d{1,3}$");
     private final HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
 
     public String selectIfGeoHideConfigured(List<String> sources) {
@@ -90,7 +86,7 @@ public class GeoHideChatGptRouteSelector {
             socket.setSoTimeout(5000);
             SSLSocket tls = (SSLSocket) SSLSocketFactory.getDefault().createSocket(socket, hostname, 443, true);
             tls.setSoTimeout(5000);
-            tls.getSSLParameters().setServerNames(List.of(new javax.net.ssl.SNIHostName(hostname)));
+            var parameters = tls.getSSLParameters();\n            parameters.setServerNames(List.of(new javax.net.ssl.SNIHostName(hostname)));\n            tls.setSSLParameters(parameters);
             tls.startHandshake();
             var writer = new java.io.OutputStreamWriter(tls.getOutputStream(), StandardCharsets.US_ASCII);
             writer.write("GET / HTTP/1.1\\r\\nHost: " + hostname
@@ -99,7 +95,7 @@ public class GeoHideChatGptRouteSelector {
             writer.flush();
             BufferedReader reader = new BufferedReader(new InputStreamReader(tls.getInputStream(), StandardCharsets.US_ASCII));
             String status = reader.readLine();
-            return status != null && status.matches("HTTP/1\\.[01] [1-4]\\d\\d.*");
+            return status != null && status.matches("HTTP/1\\.[01] [1-5]\\d\\d.*");
         } catch (Exception e) {
             return false;
         }
@@ -116,7 +112,7 @@ public class GeoHideChatGptRouteSelector {
     }
 
     private static boolean isIpv4(String value) {
-        if (!IPV4.matcher(value).matches()) return false;
+        if (!value.matches("(?:\\\\d{1,3}\\\\.){3}\\\\d{1,3}")) return false;
         for (String part : value.split("\\.")) {
             try {
                 if (Integer.parseInt(part) > 255) return false;
