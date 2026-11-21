@@ -42,7 +42,7 @@ public class NextDnsRewriteService {
                 rule -> normalize(rule.name()), rule -> rule, (first, ignored) -> first, HashMap::new));
         List<RewriteDto> existing = getExistingRewrites();
         List<RewriteDto> toDelete = new ArrayList<>();
-        Map<String, List<RewriteDto>> byName = existing.stream().collect(Collectors.groupingBy(rule -> normalize(rule.name())));
+        Set<String> keptNames = new HashSet<>();
         int preserved = 0;
 
         for (RewriteDto current : existing) {
@@ -56,13 +56,8 @@ public class NextDnsRewriteService {
                 preserved++;
                 continue;
             }
-            if (desired.content().equals(current.content())) {
-                List<RewriteDto> duplicates = byName.get(name);
-                if (!duplicates.isEmpty() && duplicates.getFirst() == current) duplicates.removeFirst();
-                else toDelete.add(current);
-            } else {
-                toDelete.add(current);
-            }
+            if (desired.content().equals(current.content()) && keptNames.add(name)) continue;
+            toDelete.add(current);
         }
 
         if (!toDelete.isEmpty()) {
