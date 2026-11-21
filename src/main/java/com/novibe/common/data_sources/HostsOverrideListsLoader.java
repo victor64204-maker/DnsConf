@@ -15,7 +15,11 @@ public class HostsOverrideListsLoader extends ListLoader<HostsOverrideListsLoade
             "canva.com", "canva-apps.com", "canva.dev"
     );
 
-    public static void useChatGptOverrideIp(String ip) {\n        ListLoader.useChatGptOverrideIp(ip);\n    }\n\n    public record BypassRoute(String ip, String website) {
+    public static void useChatGptOverrideIp(String ip) {
+        ListLoader.useChatGptOverrideIp(ip);
+    }
+
+    public record BypassRoute(String ip, String website) {
     }
 
     @Override
