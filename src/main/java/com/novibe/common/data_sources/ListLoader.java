@@ -82,8 +82,8 @@ public abstract class ListLoader<T> {
             else if (chat) line = replaceGeoHideIp(line, CHATGPT_OVERRIDE_IP, geoHideIps);
             else if (google) line = replaceGeoHideIp(line, GOOGLE_AI_OVERRIDE_IP, geoHideIps);
             result.append(line);
-            if (header.startsWith("# chatgpt (openai)") && !hasWsHost) result.append('\\n').append(CHATGPT_OVERRIDE_IP).append(" ws.chatgpt.com");
-            if (i < lines.length - 1) result.append('\\n');
+            if (header.startsWith("# chatgpt (openai)") && !hasWsHost) result.append((char) 10).append(CHATGPT_OVERRIDE_IP).append(" ws.chatgpt.com");
+            if (i < lines.length - 1) result.append((char) 10);
         }
         return result.toString();
     }
