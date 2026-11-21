@@ -112,7 +112,7 @@ public class GeoHideChatGptRouteSelector {
     }
 
     private static boolean isIpv4(String value) {
-        if (!value.matches("(?:\\\\d{1,3}\\\\.){3}\\\\d{1,3}")) return false;
+        if (!value.matches("(?:\\d{1,3}\\.){3}\\d{1,3}")) return false;
         for (String part : value.split("\\.")) {
             try {
                 if (Integer.parseInt(part) > 255) return false;
