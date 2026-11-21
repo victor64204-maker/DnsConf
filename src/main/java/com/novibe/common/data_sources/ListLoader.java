@@ -80,6 +80,7 @@ public abstract class ListLoader<T> {
             else if (header.startsWith("# google gemini ai") || header.startsWith("# google ai")) { Log.io("Using GeoHide Google AI override IP: " + GOOGLE_AI_OVERRIDE_IP); chat = false; google = true; }
             else if (header.startsWith("#")) { chat = false; google = false; }
             else if (chat) line = replaceGeoHideIp(line, CHATGPT_OVERRIDE_IP, geoHideIps);
+            else if (isHostsEntryFor(line, "ws.chatgpt.com")) line = replaceHostsEntryIp(line, CHATGPT_OVERRIDE_IP);
             else if (google) line = replaceGeoHideIp(line, GOOGLE_AI_OVERRIDE_IP, geoHideIps);
             result.append(line);
             if (header.startsWith("# chatgpt (openai)") && !hasWsHost) result.append((char) 10).append(CHATGPT_OVERRIDE_IP).append(" ws.chatgpt.com");
@@ -98,6 +99,17 @@ public abstract class ListLoader<T> {
             if (inHeader) { Matcher m = GEOHIDE_IP_COMMENT.matcher(line); if (m.matches()) ips.add(m.group(1)); }
         }
         return ips;
+    }
+
+    private boolean isHostsEntryFor(String line, String domain) {
+        Matcher matcher = HOSTS_ENTRY.matcher(line);
+        return matcher.matches()
+                && matcher.group(3).strip().split("\\s+", 2)[0].equalsIgnoreCase(domain);
+    }
+
+    private String replaceHostsEntryIp(String line, String replacement) {
+        Matcher matcher = HOSTS_ENTRY.matcher(line);
+        return matcher.matches() ? matcher.group(1) + replacement + matcher.group(3) : line;
     }
 
     private String replaceGeoHideIp(String line, String replacement, Set<String> ips) {
