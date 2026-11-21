@@ -24,43 +24,33 @@ import java.util.stream.Collectors;
 
 @Setter(onMethod_ = @Autowired)
 public abstract class ListLoader<T> {
-
-    private static final String CHATGPT_OVERRIDE_IP = "193.233.112.88";
+    private static volatile String CHATGPT_OVERRIDE_IP = "193.233.112.88";
     private static final String GOOGLE_AI_OVERRIDE_IP = "193.233.112.88";
-    private static final Set<String> LEGACY_GEOHIDE_IPS = Set.of(
-            "45.155.204.190", "37.230.192.51"
-    );
-    private static final Pattern GEOHIDE_IP_COMMENT = Pattern.compile(
-            "^\\s*#\\s*((?:\\d{1,3}\\.){3}\\d{1,3})\\s*$"
-    );
-    private static final Pattern HOSTS_ENTRY = Pattern.compile(
-            "^(\\s*)((?:\\d{1,3}\\.){3}\\d{1,3})(\\s+.*)$"
-    );
-
+    private static final Set<String> LEGACY_GEOHIDE_IPS = Set.of("45.155.204.190", "37.230.192.51");
+    private static final Pattern GEOHIDE_IP_COMMENT = Pattern.compile("^\\s*#\\s*((?:\\d{1,3}\\.){3}\\d{1,3})\\s*$");
+    private static final Pattern HOSTS_ENTRY = Pattern.compile("^(\\s*)((?:\\d{1,3}\\.){3}\\d{1,3})(\\s+.*)$");
     private HttpClient client;
+
+    public static void useChatGptOverrideIp(String ip) {
+        if (ip == null || !ip.matches("(?:\\d{1,3}\\.){3}\\d{1,3}")) throw new IllegalArgumentException("Invalid IPv4 address");
+        for (String octet : ip.split("\\.")) if (Integer.parseInt(octet) > 255) throw new IllegalArgumentException("Invalid IPv4 address");
+        CHATGPT_OVERRIDE_IP = ip;
+    }
 
     protected abstract T toObject(String line);
     protected abstract String listType();
     protected abstract Predicate<String> filterRelatedLines();
 
-    @SneakyThrows
-    @SuppressWarnings("preview")
+    @SneakyThrows @SuppressWarnings("preview")
     public List<T> fetchWebsites(List<String> urls) {
         @Cleanup var scope = StructuredTaskScope.open();
         List<StructuredTaskScope.Subtask<String>> requests = new ArrayList<>();
         urls.stream().map(url -> scope.fork(() -> fetchList(url))).forEach(requests::add);
         scope.join();
-        return requests.stream()
-                .map(StructuredTaskScope.Subtask::get)
-                .map(String::stripIndent)
-                .flatMap(s -> Pattern.compile("\\r?\\n").splitAsStream(s))
-                .filter(line -> !line.isBlank())
-                .filter(line -> !line.startsWith("#"))
-                .map(line -> line.toLowerCase(Locale.ROOT))
-                .filter(filterRelatedLines())
-                .distinct()
-                .map(this::toObject)
-                .collect(Collectors.toCollection(ArrayList::new));
+        return requests.stream().map(StructuredTaskScope.Subtask::get).map(String::stripIndent)
+                .flatMap(s -> Pattern.compile("\\r?\\n").splitAsStream(s)).filter(line -> !line.isBlank())
+                .filter(line -> !line.startsWith("#")).map(line -> line.toLowerCase(Locale.ROOT))
+                .filter(filterRelatedLines()).distinct().map(this::toObject).collect(Collectors.toCollection(ArrayList::new));
     }
 
     @SneakyThrows
@@ -68,9 +58,7 @@ public abstract class ListLoader<T> {
         Log.io("Loading %s list from url: %s".formatted(listType(), url));
         HttpRequest request = HttpRequest.newBuilder(URI.create(url)).GET().build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IllegalStateException("Source returned HTTP " + response.statusCode() + ": " + url);
-        }
+        if (response.statusCode() < 200 || response.statusCode() >= 300) throw new IllegalStateException("Source returned HTTP " + response.statusCode() + ": " + url);
         String body = response.body();
         if (body == null || body.isBlank()) throw new IllegalStateException("Source returned an empty body: " + url);
         return rewriteSpecialBlocks(body);
@@ -78,44 +66,24 @@ public abstract class ListLoader<T> {
 
     private String rewriteSpecialBlocks(String body) {
         String[] lines = body.split("\\R", -1);
-        boolean hasChatGptWebSocketHost = false;
+        boolean hasWsHost = false;
         for (String candidate : lines) {
-            Matcher candidateMatcher = HOSTS_ENTRY.matcher(candidate);
-            if (candidateMatcher.matches()
-                    && candidateMatcher.group(3).strip().split("\\s+", 2)[0].equalsIgnoreCase("ws.chatgpt.com")) {
-                hasChatGptWebSocketHost = true;
-                break;
-            }
+            Matcher m = HOSTS_ENTRY.matcher(candidate);
+            if (m.matches() && m.group(3).strip().split("\\s+", 2)[0].equalsIgnoreCase("ws.chatgpt.com")) { hasWsHost = true; break; }
         }
         Set<String> geoHideIps = extractGeoHideIps(lines);
         StringBuilder result = new StringBuilder(body.length());
-        boolean inChatGptBlock = false;
-        boolean inGoogleAiBlock = false;
-
+        boolean chat = false, google = false;
         for (int i = 0; i < lines.length; i++) {
-            String line = lines[i];
-            String header = line.stripLeading().toLowerCase(Locale.ROOT);
-            if (header.startsWith("# chatgpt (openai)")) {
-                Log.io("Using GeoHide ChatGPT override IP: " + CHATGPT_OVERRIDE_IP);
-                inChatGptBlock = true;
-                inGoogleAiBlock = false;
-            } else if (header.startsWith("# google gemini ai") || header.startsWith("# google ai")) {
-                Log.io("Using GeoHide Google AI override IP: " + GOOGLE_AI_OVERRIDE_IP);
-                inChatGptBlock = false;
-                inGoogleAiBlock = true;
-            } else if (header.startsWith("#")) {
-                inChatGptBlock = false;
-                inGoogleAiBlock = false;
-            } else if (inChatGptBlock) {
-                line = replaceGeoHideIp(line, CHATGPT_OVERRIDE_IP, geoHideIps);
-            } else if (inGoogleAiBlock) {
-                line = replaceGeoHideIp(line, GOOGLE_AI_OVERRIDE_IP, geoHideIps);
-            }
+            String line = lines[i], header = line.stripLeading().toLowerCase(Locale.ROOT);
+            if (header.startsWith("# chatgpt (openai)")) { Log.io("Using GeoHide ChatGPT override IP: " + CHATGPT_OVERRIDE_IP); chat = true; google = false; }
+            else if (header.startsWith("# google gemini ai") || header.startsWith("# google ai")) { Log.io("Using GeoHide Google AI override IP: " + GOOGLE_AI_OVERRIDE_IP); chat = false; google = true; }
+            else if (header.startsWith("#")) { chat = false; google = false; }
+            else if (chat) line = replaceGeoHideIp(line, CHATGPT_OVERRIDE_IP, geoHideIps);
+            else if (google) line = replaceGeoHideIp(line, GOOGLE_AI_OVERRIDE_IP, geoHideIps);
             result.append(line);
-            if (header.startsWith("# chatgpt (openai)") && !hasChatGptWebSocketHost) {
-                result.append('\n').append(CHATGPT_OVERRIDE_IP).append(" ws.chatgpt.com");
-            }
-            if (i < lines.length - 1) result.append('\n');
+            if (header.startsWith("# chatgpt (openai)") && !hasWsHost) result.append('\\n').append(CHATGPT_OVERRIDE_IP).append(" ws.chatgpt.com");
+            if (i < lines.length - 1) result.append('\\n');
         }
         return result.toString();
     }
@@ -124,27 +92,18 @@ public abstract class ListLoader<T> {
         Set<String> ips = new HashSet<>(LEGACY_GEOHIDE_IPS);
         boolean inHeader = false;
         for (String line : lines) {
-            String normalized = line.strip().toLowerCase(Locale.ROOT);
-            if (!inHeader && normalized.contains("ip-адреса принадлежат geohide dns")) {
-                inHeader = true;
-                continue;
-            }
-            if (inHeader && normalized.contains("остальные ip-адреса принадлежат")) break;
-            if (inHeader) {
-                Matcher matcher = GEOHIDE_IP_COMMENT.matcher(line);
-                if (matcher.matches()) ips.add(matcher.group(1));
-            }
+            String n = line.strip().toLowerCase(Locale.ROOT);
+            if (!inHeader && n.contains("ip-адреса принадлежат geohide dns")) { inHeader = true; continue; }
+            if (inHeader && n.contains("остальные ip-адреса принадлежат")) break;
+            if (inHeader) { Matcher m = GEOHIDE_IP_COMMENT.matcher(line); if (m.matches()) ips.add(m.group(1)); }
         }
         return ips;
     }
 
-    private String replaceGeoHideIp(String line, String replacementIp, Set<String> geoHideIps) {
-        Matcher matcher = HOSTS_ENTRY.matcher(line);
-        if (!matcher.matches() || !geoHideIps.contains(matcher.group(2))) return line;
-        return matcher.group(1) + replacementIp + matcher.group(3);
+    private String replaceGeoHideIp(String line, String replacement, Set<String> ips) {
+        Matcher m = HOSTS_ENTRY.matcher(line);
+        return m.matches() && ips.contains(m.group(2)) ? m.group(1) + replacement + m.group(3) : line;
     }
 
-    protected String removeWWW(String domain) {
-        return domain.startsWith("www.") ? domain.substring("www.".length()) : domain;
-    }
+    protected String removeWWW(String domain) { return domain.startsWith("www.") ? domain.substring(4) : domain; }
 }
