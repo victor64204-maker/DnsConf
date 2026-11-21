@@ -2,6 +2,12 @@ name: NextDNS Rewrite Configurer
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+concurrency:
+  group: nextdns-rewrite-sync
+  cancel-in-progress: false
 
 jobs:
   build:
