@@ -2,11 +2,6 @@ name: NextDNS Rewrite Configurer
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - codex/geohide-eu-us-autofailover
-  schedule:
-    - cron: '17 * * * *'
 
 concurrency:
   group: nextdns-rewrite-sync
@@ -43,7 +38,6 @@ jobs:
 
 
       - name: Run Rewrite synchronizer
-        if: github.event_name != 'push'
         run: |
           echo "Starting NextDNS Rewrite synchronizer..."
           java --enable-preview -jar target/*.jar
