@@ -78,6 +78,15 @@ public abstract class ListLoader<T> {
 
     private String rewriteSpecialBlocks(String body) {
         String[] lines = body.split("\\R", -1);
+        boolean hasChatGptWebSocketHost = false;
+        for (String candidate : lines) {
+            Matcher candidateMatcher = HOSTS_ENTRY.matcher(candidate);
+            if (candidateMatcher.matches()
+                    && candidateMatcher.group(3).strip().split("\\s+", 2)[0].equalsIgnoreCase("ws.chatgpt.com")) {
+                hasChatGptWebSocketHost = true;
+                break;
+            }
+        }
         Set<String> geoHideIps = extractGeoHideIps(lines);
         StringBuilder result = new StringBuilder(body.length());
         boolean inChatGptBlock = false;
@@ -103,6 +112,9 @@ public abstract class ListLoader<T> {
                 line = replaceGeoHideIp(line, GOOGLE_AI_OVERRIDE_IP, geoHideIps);
             }
             result.append(line);
+            if (header.startsWith("# chatgpt (openai)") && !hasChatGptWebSocketHost) {
+                result.append('\n').append(CHATGPT_OVERRIDE_IP).append(" ws.chatgpt.com");
+            }
             if (i < lines.length - 1) result.append('\n');
         }
         return result.toString();
