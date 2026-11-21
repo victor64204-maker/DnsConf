@@ -58,7 +58,7 @@ public class NextDnsRewriteService {
             }
             String key = name + "=" + current.content();
             if (desired.content().equals(current.content()) && keptRules.add(key)) continue;
-            if (!desired.content().equals(current.content())) preserved++;
+            if (!desired.content().equals(current.content())) toDelete.add(current);
         }
 
         if (!toDelete.isEmpty()) {
