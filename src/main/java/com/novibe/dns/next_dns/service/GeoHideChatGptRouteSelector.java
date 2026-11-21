@@ -90,7 +90,7 @@ public class GeoHideChatGptRouteSelector {
         try {
             socket.connect(new InetSocketAddress(ip, 443), 5000);
             socket.setSoTimeout(5000);
-            try (SSLSocket tls = (SSLSocket) SSLSocketFactory.getDefault()
+            try (SSLSocket tls = (SSLSocket) ((SSLSocketFactory) SSLSocketFactory.getDefault())
                     .createSocket(socket, hostname, 443, true)) {
                 SSLParameters parameters = tls.getSSLParameters();
                 parameters.setServerNames(List.of(new SNIHostName(hostname)));
