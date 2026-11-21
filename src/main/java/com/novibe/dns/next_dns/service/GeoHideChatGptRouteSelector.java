@@ -10,6 +10,12 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SNIHostName;
+import java.net.Socket;
+import java.net.InetSocketAddress;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SNIHostName;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -80,18 +86,21 @@ public class GeoHideChatGptRouteSelector {
     }
 
     private boolean probe(String ip, String hostname) {
+        Socket socket = new Socket();
         try {
-            Socket socket = new Socket();
             socket.connect(new InetSocketAddress(ip, 443), 5000);
             socket.setSoTimeout(5000);
-            SSLSocket tls = (SSLSocket) SSLSocketFactory.getDefault()
-                    .createSocket(socket, hostname, 443, true);
-            SSLParameters parameters = tls.getSSLParameters();
-            parameters.setServerNames(List.of(new SNIHostName(hostname)));
-            tls.setSSLParameters(parameters);
-            tls.startHandshake();
-            return true;
+            try (SSLSocket tls = (SSLSocket) SSLSocketFactory.getDefault()
+                    .createSocket(socket, hostname, 443, true)) {
+                SSLParameters parameters = tls.getSSLParameters();
+                parameters.setServerNames(List.of(new SNIHostName(hostname)));
+                tls.setSSLParameters(parameters);
+                tls.startHandshake();
+                return true;
+            }
         } catch (Exception e) {
+            try { socket.close(); } catch (Exception ignored) { }
+            Log.io("TLS check failed for " + hostname + " at " + ip + ": " + e.getClass().getSimpleName());
             return false;
         }
     }
