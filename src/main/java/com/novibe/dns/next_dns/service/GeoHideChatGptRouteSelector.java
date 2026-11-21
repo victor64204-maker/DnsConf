@@ -81,23 +81,14 @@ public class GeoHideChatGptRouteSelector {
     }
 
     private boolean probe(String ip, String hostname) {
-        try (Socket socket = new Socket()) {
-            socket.connect(new InetSocketAddress(InetAddress.getByName(ip), 443), 5000);
-            socket.setSoTimeout(5000);
-            SSLSocket tls = (SSLSocket) SSLSocketFactory.getDefault().createSocket(socket, hostname, 443, true);
-            tls.setSoTimeout(5000);
-            var parameters = tls.getSSLParameters();
-            parameters.setServerNames(List.of(new javax.net.ssl.SNIHostName(hostname)));
-            tls.setSSLParameters(parameters);
-            tls.startHandshake();
-            var writer = new java.io.OutputStreamWriter(tls.getOutputStream(), StandardCharsets.US_ASCII);
-            writer.write("GET / HTTP/1.1\r\nHost: " + hostname
-                    + "\r\nConnection: Upgrade\\r\\nUpgrade: websocket"
-                    + "\\r\\nSec-WebSocket-Version: 13\\r\\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\\r\\n\\r\\n");
-            writer.flush();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(tls.getInputStream(), StandardCharsets.US_ASCII));
-            String status = reader.readLine();
-            return status != null && status.matches("HTTP/1\\.[01] [1-5]\\d\\d.*");
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create("https://" + hostname + "/"))
+                    .timeout(Duration.ofSeconds(8))
+                    .GET()
+                    .build();
+            HttpResponse<Void> response = client.send(request,
+                    HttpResponse.BodyHandlers.discarding());
+            return response.statusCode() >= 200 && response.statusCode() < 500;
         } catch (Exception e) {
             return false;
         }
